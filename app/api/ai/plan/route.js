@@ -40,6 +40,3 @@ Include flight ballpark, lodging per night, activities by day, local food recs, 
     });
   }
 }
-    );
-  }
-}
