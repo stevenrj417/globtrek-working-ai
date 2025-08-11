@@ -1,7 +1,4 @@
-export const runtime = "nodejs"; // use Node for the OpenAI SDK
-
-import OpenAI from "openai";
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+export const runtime = "edge"; // fast + no SDK needed
 
 export async function POST(req) {
   try {
@@ -10,23 +7,34 @@ export async function POST(req) {
     const prompt = `Create a detailed travel itinerary for ${days} days in ${destination}.
 Include flight ballpark, lodging per night, activities by day, local food recs, and a total estimated cost. Keep it concise but specific.`;
 
-    const response = await client.chat.completions.create({
-      model: "gpt-4o-mini",
-      temperature: 0.5,
-      messages: [
-        { role: "system", content: "You are a travel planning assistant for GlobTrek. Return a 4–7 day, day-by-day itinerary with rough USD costs." },
-        { role: "user", content: prompt }
-      ]
+    const r = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        temperature: 0.5,
+        messages: [
+          { role: "system", content: "You are Globtrek’s travel agent. Return a 4–7 day, day-by-day itinerary with rough USD costs." },
+          { role: "user", content: prompt }
+        ]
+      })
     });
 
-    const plan = response.choices?.[0]?.message?.content || "";
+    if (!r.ok) {
+      const err = await r.text();
+      return new Response(err, { status: r.status, headers: { "Content-Type": "text/plain" } });
+    }
+
+    const data = await r.json();
+    const plan = data.choices?.[0]?.message?.content || "";
     return new Response(JSON.stringify({ plan }), {
-      status: 200,
       headers: { "Content-Type": "application/json" }
     });
-  } catch (error) {
-    console.error(error);
-    return new Response(JSON.stringify({ error: String(error?.message || error) }), {
+  } catch (e) {
+    return new Response(JSON.stringify({ error: String(e?.message || e) }), {
       status: 500,
       headers: { "Content-Type": "application/json" }
     });
