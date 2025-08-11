@@ -1,37 +1,62 @@
-export const runtime = "edge";
+// app/api/ai/plan/route.js
+export const runtime = "edge"; // fast; no SDK needed
 
+// Simple GET so visiting the URL shows something (not 405)
 export async function GET() {
-  return new Response("ok");
-}import OpenAI from "openai";
+  return new Response("ok", { headers: { "Content-Type": "text/plain" } });
+}
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
+// Real planner endpoint
 export async function POST(req) {
   try {
     const { destination, days } = await req.json();
 
-    const prompt = `Create a detailed travel itinerary for ${days} days in ${destination}.
-    Include flights, hotels, activities, food recommendations, and total estimated costs.`;
+    if (!destination || !days) {
+      return new Response(JSON.stringify({ error: "Missing destination or days" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
 
-    const response = await client.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: "You are a travel planning assistant for GlobTrek." },
-        { role: "user", content: prompt }
-      ],
+    const prompt = `Create a detailed travel itinerary for ${days} days in ${destination}.
+Include flight ballpark, lodging per night, activities by day, local food recs, and a total estimated cost. Keep it concise but specific.`;
+
+    const r = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        temperature: 0.5,
+        messages: [
+          { role: "system", content: "You are Globtrek’s travel agent. Return a 4–7 day, day-by-day itinerary with rough USD costs in USD." },
+          { role: "user", content: prompt }
+        ]
+      })
     });
 
-    return new Response(
-      JSON.stringify({ plan: response.choices[0].message.content }),
-      { status: 200 }
-    );
-  } catch (error) {
-    console.error(error);
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500 }
-    );
+    // Bubble up OpenAI errors (401 bad key, 429 rate limit, etc.)
+    if (!r.ok) {
+      const text = await r.text();
+      return new Response(text || "Upstream error", {
+        status: r.status,
+        headers: { "Content-Type": "text/plain" }
+      });
+    }
+
+    const data = await r.json();
+    const plan = data.choices?.[0]?.message?.content || "";
+
+    return new Response(JSON.stringify({ plan }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    });
+  } catch (e) {
+    return new Response(JSON.stringify({ error: String(e?.message || e) }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" }
+    });
   }
 }
