@@ -1,4 +1,12 @@
-export const runtime = "edge"; // no SDK needed
+export const runtime = "edge";
+
+export async function GET() {
+  return new Response("ok");
+}
+
+export async function POST(req) {
+  // ...your existing POST code...
+}export const runtime = "edge"; // no SDK needed
 
 export async function POST(req) {
   try {
