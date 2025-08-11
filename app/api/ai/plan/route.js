@@ -1,4 +1,8 @@
-import OpenAI from "openai";
+export const runtime = "edge";
+
+export async function GET() {
+  return new Response("ok");
+}import OpenAI from "openai";
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
